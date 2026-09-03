@@ -18,33 +18,40 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define OPT_MATCH 0     // option match
+#define OPT_NOT_MATCH 1 // option not match
+
 /**
- * @brief Cleans up and removes unmatched token nodes from the linked list.
+ * @brief Prunes unmatched tokens from the chain and frees their allocated
+ * memory in-place.
  *
- * Traverses the token list starting at @p head. For any token node where
- * @c match is 0, the node is unlinked and its memory is freed using
- * @ref kfgx_token_free.
- *
- * @param[in] head Pointer to the head of the token linked list.
- * @return token_t* Pointer to the updated head of the linked list.
+ * @param[in,out] head Double pointer to the head of the token list.
  */
-static token_t *kfgx_tokens_cleanup_unmatched(token_t *head)
+static void kfgx_tokens_cleanup_unmatched(token_t **head)
 {
-    token_t *curr = head;
+    token_t *curr;
     token_t *prev = NULL;
+
+    if (!head || !*head) {
+        return;
+    }
+
+    curr = *head;
 
     while (curr) {
         token_t *next = curr->next;
 
         if (!curr->match) {
+            /* Unlink current unmatched node */
             if (prev) {
                 prev->next = next;
             } else {
-                head = next;
+                *head = next;
             }
 
             curr->next = NULL;
-            kfgx_token_free(curr);
+            /* Safely free node using double pointer interface */
+            kfgx_token_free(&curr);
 
             curr = next;
         } else {
@@ -52,8 +59,8 @@ static token_t *kfgx_tokens_cleanup_unmatched(token_t *head)
             curr = next;
         }
     }
-    pr_debug("cleanup unmatched options,tokens=%p", (void *)head);
-    return head;
+
+    pr_debug("Cleaned up unmatched options, new head=%p", (void *)*head);
 }
 
 /**
@@ -79,6 +86,11 @@ static void chained_matched_options(token_t *head)
 
     foreach_node(t, head)
     {
+        if (!t) {
+            pr_debug("no option found to chained");
+            return;
+        }
+
         if (!t->opt) {
             pr_fatal("NULL option found: cleanup or token setup failed");
             exit(-1);
@@ -93,96 +105,179 @@ static void chained_matched_options(token_t *head)
     pr_debug("chained matched options");
 }
 
+// |------------------ Tokenizer core
+static int has_match_l_opt(token_t *head, const char *arg)
+{
+    token_t *t;
+
+    if (!head || !arg) {
+        pr_error("tokens=%p, arg=%p", (void *)head, (void *)arg);
+        return -1;
+    }
+
+    foreach_node(t, head)
+    {
+        if (t->opt && HAVE_OPTION(t->opt->l_opt, arg)) {
+            t->match = 1;
+            return OPT_MATCH;
+        }
+    }
+    return OPT_NOT_MATCH;
+}
+
+static int has_match_s_opt(token_t *head, const char *arg)
+{
+    token_t *t;
+
+    if (!head || !arg) {
+        pr_error("tokens=%p, arg=%p", (void *)head, (void *)arg);
+        return -1;
+    }
+
+    /* Validate short option syntax: "-a" or grouped "-abc" (excluding "--") */
+    if (arg[0] == '-' && arg[1] != '\0' && arg[1] != '-') {
+        for (const char *p = arg + 1; *p != '\0'; p++) {
+            char short_str[2] = {*p, '\0'};
+            foreach_node(t, head)
+            {
+                /* Compare while skipping the leading '-' in opt->s_opt */
+                if (t->opt && t->opt->s_opt && t->opt->s_opt[0] != '\0' &&
+                    HAVE_OPTION(t->opt->s_opt + 1, short_str)) {
+                    t->match = 1;
+                    goto next;
+                }
+            }
+            return OPT_NOT_MATCH;
+        next:
+        }
+    }
+
+    return OPT_MATCH;
+}
+
+static int has_value(token_t *head, const char *arg)
+{
+    size_t key_len;
+    token_t *t;
+    char *key = NULL;
+    char *c = NULL;
+    int ret = OPT_NOT_MATCH;
+
+    if (!head || !arg) {
+        pr_error("tokens=%p, arg=%p", (void *)head, (void *)arg);
+        return -1;
+    }
+
+    /* Locate the first '=' delimiter */
+    c = strchr(arg, '=');
+    if (!c) {
+        pr_debug("no assign with '=' found");
+        return has_match_l_opt(head, arg);
+    }
+
+    /* Ensure a value exists after '=' */
+    if (*(c + 1) == '\0') {
+        pr_debug("no value assigned after '='");
+        return ret;
+    }
+
+    /* Extract key substring prior to '=' */
+    key_len = (size_t)(c - arg);
+    key = malloc(key_len + 1);
+    if (!key) {
+        pr_error("failed to allocate memory for 'key'");
+        return -1;
+    }
+
+    memcpy(key, arg, key_len);
+    key[key_len] = '\0';
+
+    /* Match key against registered long options */
+    foreach_node(t, head)
+    {
+        if (t->opt && HAVE_OPTION(t->opt->l_opt, key)) {
+            t->match = 1;
+
+            /* Prevent memory leaks if option value is reassigned */
+            if (t->opt->value) {
+                free(t->opt->value);
+            }
+
+            t->opt->value = strdup(c + 1);
+            pr_debug("Matched option: %s with value: %s", key, t->opt->value);
+            ret = OPT_MATCH;
+            goto end;
+        }
+    }
+
+end:
+    free(key);
+    return ret;
+}
+
 /**
- * @brief Parses CLI arguments and validates matching tokens without internal
- * deallocations.
+ * @brief Parses CLI arguments and validates matching tokens.
  *
- * @param[in,out] cmd Structure containing arguments set and handler with target
- * tokens.
- * @return 0 on success, -1 on invalid input or structure.
+ * @param[in,out] cmd Structure containing argument vector and handler tokens.
+ * @return 0 on success, -1 on parsing error or invalid input structure.
  */
 static int kfgx_cli_tokenizer_impl(struct kfgx_cmd_struct *cmd)
 {
     char **set;
-    char *c;
-    token_t *t, *lt;
+    token_t *head;
+    int ret;
 
     if (!cmd || !cmd->handler || !cmd->handler->ltokens || !cmd->args_set) {
-        pr_warn(
-            "Invalid command structure: cmd=%p, handler=%p, args_set=%p",
-            (void *)cmd,
-            (void *)(cmd ? cmd->handler : NULL),
-            (void *)(cmd ? cmd->args_set : NULL));
+        pr_warn("Invalid command structure: cmd=%p", (void *)cmd);
         return -1;
     }
 
     set = cmd->args_set;
-    lt = cmd->handler->ltokens;
+    head = cmd->handler->ltokens;
 
     while (*set) {
         const char *arg = *set;
-        c = strchr(arg, '=');
 
-        if (c) {
-            size_t key_len = (size_t)(c - arg);
-            char *key = malloc(key_len + 1);
-            if (!key)
+        /* Check for key=value assignment syntax */
+        if (strchr(arg, '=')) {
+            ret = has_value(head, arg);
+            if (ret != OPT_MATCH) {
+                goto err;
+            } else if (ret == -1) { // internal program error
                 return -1;
-
-            memcpy(key, arg, key_len);
-            key[key_len] = '\0';
-            foreach_node(t, lt)
-            {
-                if (t->opt && HAVE_OPTION(t->opt->l_opt, key)) {
-                    t->match = 1;
-
-                    if (*(c + 1) == '\0') {
-                        pr_debug("no value assigned after '='");
-                        free(key);
-                        goto end;
-                    }
-
-                    t->opt->value = strdup(c + 1);
-                    pr_debug(
-                        "Matched option: %s with value: %s",
-                        key,
-                        t->opt->value);
-                    break;
-                }
             }
-            free(key);
+            goto next;
         } else {
-            int matched = 0;
-
-            foreach_node(t, lt)
-            {
-                if (t->opt && HAVE_OPTION(t->opt->l_opt, arg)) {
-                    t->match = 1;
-                    matched = 1;
-                    break;
-                }
+            /* Try matching long option first (e.g., --help) */
+            ret = has_match_l_opt(head, arg);
+            if (ret == OPT_MATCH) {
+                goto next;
+            } else if (ret == -1) { // internal program error
+                return -1;
             }
 
-            if (!matched && arg[0] == '-' && arg[1] != '\0' && arg[1] != '-') {
-                for (const char *p = arg + 1; *p != '\0'; p++) {
-                    char short_str[2] = {*p, '\0'};
-                    foreach_node(t, lt)
-                    {
-                        if (t->opt && HAVE_OPTION(
-                                          t->opt->s_opt + 1,
-                                          short_str)) { // to avoid the '-'
-                            t->match = 1;
-                            break;
-                        }
-                    }
-                }
+            /* Fallback to short option matching (e.g., -h or -vh) */
+            ret = has_match_s_opt(head, arg);
+            if (ret == OPT_NOT_MATCH) {
+                /* Unrecognized command-line argument */
+                pr_error("Unrecognized option: %s", arg);
+                goto err;
+            } else if (ret == -1) { // internal program error
+                return -1;
             }
+            goto next;
         }
+    err:
+        kfgx_token_free(&cmd->handler->ltokens);
+        return 0;
+
+    next:
         set++;
     }
-end:
-    cmd->handler->ltokens = kfgx_tokens_cleanup_unmatched(lt);
+    /* Prune unmatched nodes and link active options chain */
+    kfgx_tokens_cleanup_unmatched(&cmd->handler->ltokens);
     chained_matched_options(cmd->handler->ltokens);
+
     return 0;
 }
 

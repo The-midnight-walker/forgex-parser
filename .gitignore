@@ -1,3 +1,4 @@
 .vscode-ctags
 build
+compile_commands.json
 .gitignore

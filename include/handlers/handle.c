@@ -102,7 +102,8 @@ static int kfgx_execute_handler()
         return -1;
     }
 
-    if (cmd.handler->ltokens) {
+    if (cmd.handler->ltokens && cmd.handler->ltokens->opt &&
+        cmd.handler->ltokens->opt->l_opt) {
         opt = cmd.handler->ltokens->opt;
     } else {
         pr_debug("no tokens matched (ltokens is NULL)");
@@ -182,7 +183,7 @@ static int kfgx_handle_impl()
     ret = kfgx_execute_handler(cmd);
 
     // cleanup all
-    kfgx_token_free(cmd.handler->ltokens);
+    kfgx_token_free(&cmd.handler->ltokens);
     cmd.handler->ltokens = NULL; // ensure
     kfgx_free_handlers();
 
@@ -321,17 +322,16 @@ int kfgx_get_handler()
 {
     handler_t *h;
 
-    if (!cmd.handler)
-        return -1;
     h = cmd.handler;
 
-    if (check_register_ctxt(h)) {
-        return -1;
+    if (h) {
+        pr_debug("suspirious - cmd.handelr=%p but should be null",(void *)h);
     }
     foreach_node(h, lhandlers->head)
     {
         // foo@foo$ kfgx name_handler
         if (cmd.args_set && !strcmp(h->name, cmd.args_set[0])) {
+            cmd.handler = h;
             return 0;
         }
     }

@@ -94,15 +94,17 @@ static inline int set_token_valid(token_t *t)
  *
  * @note Safe to call with a NULL pointer.
  */
-static inline void kfgx_token_free(token_t *t)
+static inline void kfgx_token_free(token_t **t_ptr)
 {
     token_t *next;
+    token_t *t;
 
-    if (!t) {
-        pr_debug("token=%p: RAF & UAF risks", (void *)t);
+    if (!t_ptr || !*t_ptr) {
+        pr_debug("token pointer is NULL");
         return;
     }
 
+    t = *t_ptr;
     while (t) {
         next = t->next;
         if (t->free && t->opt) {
@@ -115,6 +117,9 @@ static inline void kfgx_token_free(token_t *t)
         free(t);
         t = next;
     }
+
+    /* Set caller's pointer to NULL */
+    *t_ptr = NULL;
 }
 
 static inline token_t *kfgx_get_new_token(const opt_t *opt)

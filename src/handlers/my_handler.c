@@ -44,7 +44,7 @@ static int my_handler_action(opt_t *options)
     } else {
         foreach_node(o, options)
         {
-            pr_debug("%s ",o->l_opt);
+            pr_debug("%s ", o->l_opt);
             if (HAVE_OPTION(o->l_opt, "--help"))
                 my_handler_usage();
 
