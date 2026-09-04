@@ -5,7 +5,17 @@
 #include <stdio.h>
 #include <string.h>
 
+<<<<<<< HEAD
 int main(int argc, char *argv[])
 {
+=======
+
+
+
+int main(int argc, char *argv[])
+{
+
+
+>>>>>>> a442f5e (cli - finish cli implementation)
     return 0;
 }

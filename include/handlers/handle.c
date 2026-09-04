@@ -333,6 +333,7 @@ int kfgx_get_handler()
         pr_debug(
             "suspicious state: cmd.handler=%p but it should be NULL",
             (void *)h);
+
     }
     foreach_node(h, lhandlers->head)
     {

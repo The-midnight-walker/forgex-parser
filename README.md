@@ -1,9 +1,4 @@
 # kernforgex
-
-<p align="center">
-  <img src="assets/kernforgex-parser.svg" alt="kernforgex parser logo" width="320" />
-</p>
-
 This project is not the final tool itself. It is the small infrastructure layer that was created while building `kernforgex` another repository on my github. At its core, it was first and foremost a parser and command-dispatch framework for Linux-oriented tooling.
 
 ## What this project is
