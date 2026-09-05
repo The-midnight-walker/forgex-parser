@@ -4,7 +4,7 @@
 
 /**
  * @file      debug.c
- * @author    jd
+ * @author    midnight walker
  * @brief     Log-level management helpers.
  * @version   0.1
  * @date      2026-08-29
