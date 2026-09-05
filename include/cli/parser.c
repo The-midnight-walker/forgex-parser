@@ -4,7 +4,7 @@
 
 /**
  * @file      parser.c
- * @author    jd
+ * @author    midnight walker
  * @brief     Parse and tokenize CLI arguments for registered handlers.
  * @version   0.1
  * @date      2026-08-29
@@ -15,6 +15,9 @@
  *
  * @copyright GNU General Public License v2.0
  */
+
+#define prfx_fmt "parser: "
+
 #include "clicntl.h"
 #include <ctype.h>
 #include <stdlib.h>
@@ -223,14 +226,14 @@ end:
  * @param[in,out] cmd Structure containing argument vector and handler tokens.
  * @return 0 on success, -1 on parsing error or invalid input structure.
  */
-static int kfgx_cli_tokenizer_impl(struct kfgx_cmd_struct *cmd)
+static int kfgx_cli_tokenizer_impl(struct cmd_struct *cmd)
 {
     char **set;
     token_t *head;
     int ret;
 
     if (!cmd || !cmd->handler || !cmd->handler->ltokens || !cmd->args_set) {
-        pr_warn("Invalid command structure: cmd=%p", (void *)cmd);
+        pr_warn("missing some fields from the user command line");
         return -1;
     }
 
@@ -290,7 +293,7 @@ static int kfgx_cli_tokenizer_impl(struct kfgx_cmd_struct *cmd)
  *
  * @return 0 on success, -1 on error.
  */
-int kfgx_cli_tokenizer(struct kfgx_cmd_struct *cmd)
+int kfgx_cli_tokenizer(struct cmd_struct *cmd)
 {
     if (check_cli_args(cmd))
         return -1;
@@ -298,7 +301,7 @@ int kfgx_cli_tokenizer(struct kfgx_cmd_struct *cmd)
     return kfgx_cli_tokenizer_impl(cmd);
 }
 
-static int kfgx_cli_parser_impl(struct kfgx_cmd_struct *cmd)
+static int kfgx_cli_parser_impl(struct cmd_struct *cmd)
 {
     return kfgx_cli_tokenizer_impl(cmd);
 }
@@ -310,12 +313,8 @@ static int kfgx_cli_parser_impl(struct kfgx_cmd_struct *cmd)
  *
  * @return 0 on success, -1 on error.
  */
-int kfgx_cli_parser(struct kfgx_cmd_struct *cmd)
+int kfgx_cli_parser(struct cmd_struct *cmd)
 {
-    if (cmd->args_nr == 0) {
-        pr_debug("args_nr=0");
-    }
-
     if (!cmd->handler) {
         pr_warn("handler=%p", (void *)cmd->handler);
         return -1;
