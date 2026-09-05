@@ -17,9 +17,23 @@
 #include "prio_lists.h"
 #include "shell_completions.h"
 
-#define HAVE_OPTION(option, l_opt) (!strcmp((option), (l_opt)))
-#define MATCH_L_OPT(opt, arg) (!strcmp((opt), (arg)))
-#define MATCH_S_OPT(opt, arg) (!strcmp((opt), (arg)))
+static inline int have_option(const char *option, const char *l_opt)
+{
+    return (option != NULL && l_opt != NULL && strcmp(option, l_opt) == 0);
+}
+#define HAVE_OPTION(option, l_opt) have_option((option), (l_opt))
+
+static inline int match_l_opt(const char *opt, const char *arg)
+{
+    return (opt != NULL && arg != NULL && strcmp(opt, arg) == 0);
+}
+#define MATCH_L_OPT(opt, arg) match_l_opt((opt), (arg))
+
+static inline int match_s_opt(const char *opt, const char *arg)
+{
+    return (opt != NULL && arg != NULL && strcmp(opt, arg) == 0);
+}
+#define MATCH_S_OPT(opt, arg) match_s_opt((opt), (arg))
 
 /* Token State Flags */
 #define TOKEN_VALID 0x00
@@ -42,13 +56,13 @@ typedef struct kfgx_token {
     token_t *next;
 } token_t;
 
-struct kfgx_cmd_struct {
+struct cmd_struct {
     handler_t *handler;
     int args_nr;
     char **args_set;
 };
 
-int kfgx_cli_parser(struct kfgx_cmd_struct *);
+int kfgx_cli_parser(struct cmd_struct *);
 
 static inline int check_option(const opt_t *opt)
 {
@@ -153,9 +167,6 @@ static inline token_t *kfgx_get_new_token(const opt_t *opt)
     return t;
 }
 
-// heat
-static inline token_t *kfgx_get_new_token(const opt_t *);
-
 /**
  * @brief Add a new option token to a registered handler.
  *
@@ -191,6 +202,11 @@ static inline int add_new_option(handler_t *h, const opt_t *opt)
 
     t->next = h->ltokens;
     h->ltokens = t;
+    pr_info(
+        "add new option { '%s' '%s' } for handler '%s'",
+        (opt->l_opt) ? opt->l_opt : "",
+        (opt->s_opt) ? opt->s_opt : "",
+        h->name);
 
     return 0;
 }
@@ -207,14 +223,14 @@ static inline int add_new_option(handler_t *h, const opt_t *opt)
  *
  * @return 0 on success, -1 on error.
  */
-static inline int check_cli_args(struct kfgx_cmd_struct *cmd)
+static inline int check_cli_args(struct cmd_struct *cmd)
 {
     char **args_set = cmd->args_set;
     int nr [[maybe_unused]];
     char **set [[maybe_unused]];
 
     if (!cmd) {
-        pr_warn("kfgx_cmd_struct *cmd=%p", (void *)cmd);
+        pr_warn("cmd_struct *cmd=%p", (void *)cmd);
         return -1;
     }
 
