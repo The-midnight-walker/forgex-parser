@@ -8,12 +8,14 @@
 #define HANDLER_MIN_PRIO -10
 #define HANDLER_MAX_PRIO 20
 
-#define HANDLER_REGISTERED 1
-#define HANDLER_UNREGISTERED 0
-#define HANDLER_BAD_CONF -1
-#define HANDLER_NOT_FOUND -2
+enum handler_state {
+    HANDLER_UNREGISTERED = -3,
+    HANDLER_BAD_CONF = -2,
+    HANDLER_UNKNOWN = -1,
+    HANDLER_REGISTERED = 0,
+};
 
-struct kfgx_cmd_struct;
+struct cmd_struct;
 typedef struct kfgx_token token_t;
 typedef struct handler handler_t;
 typedef struct kfgx_opt opt_t;
@@ -50,7 +52,7 @@ typedef struct handler {
  * @note The handler passed to this function should be properly initialized
  *       before being set as default.
  */
-int set_default_handler(handler_t *);
+int set_default_handler(const handler_t *);
 
 /** @brief Main CLI handling function. */
 int handle();
@@ -65,7 +67,7 @@ int register_handler(handler_t *h);
  */
 int unregister_handler(handler_t *);
 
-int init_handling(const int, char **);
+int init_handling(const int, const char **);
 
 int generate_sh_completions();
 
