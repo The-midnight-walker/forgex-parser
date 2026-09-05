@@ -58,7 +58,8 @@ unsigned int disable_debug_loglevel(const unsigned int);
 unsigned int enable_debug_loglevel(const unsigned int);
 
 /**
- * @brief output format in debugging mode : [ status ] prfx_fmt: fmt [ function : file:line]
+ * @brief output format in debugging mode : [ status ] prfx_fmt: fmt [ function
+ * : file:line]
  */
 #ifdef DEBUG
 #define dbg_log(status, fmt, ...)                                              \
