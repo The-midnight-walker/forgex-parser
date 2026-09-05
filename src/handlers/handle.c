@@ -59,7 +59,7 @@ static int check_cli_ctx()
 static int check_register_ctx(const handler_t *);
 static int kfgx_init_handlers(void);
 static int kfgx_free_handlers(void);
-static int kfgx_resolve_handler();
+static int kfgx_resolve_handler(void);
 
 int check_handler(const handler_t *h)
 {
@@ -127,7 +127,7 @@ static inline int kfgx_execute_handler_impl(handler_action_t act, opt_t *opt)
     return act(opt);
 }
 
-static int kfgx_execute_handler()
+static int kfgx_execute_handler(void)
 {
     opt_t *opt = NULL;
 
@@ -149,7 +149,7 @@ static int kfgx_execute_handler()
     return kfgx_execute_handler_impl(cli_ctx.cmd.handler->action, opt);
 }
 
-static int kfgx_handle_impl()
+static int kfgx_handle_impl(void)
 {
     int ret = -1;
 
@@ -163,7 +163,7 @@ static int kfgx_handle_impl()
     if (kfgx_cli_parser(&cli_ctx.cmd))
         goto end;
 
-    ret = kfgx_execute_handler(cli_ctx.cmd);
+    ret = kfgx_execute_handler();
 
 end:
     // cleanup all
@@ -183,26 +183,20 @@ end:
  * handler-specific options, tokenizes inputs, executes the payload, and
  * performs comprehensive memory cleanup.
  *
- * @param[in,out] cmd Pointer to the command context structure containing
- * argument vector and execution states.
- *
  * @return 0 on successful processing and execution.
- * @return -1 if @p cmd is NULL, validation fails, handler resolution fails
- * without a default, or token parsing fails.
+ * @return -1 if validation fails, handler resolution fails without a default,
+ * or token parsing fails.
  *
  * @note This function guarantees resource teardown by releasing the token list
  *       (@c ltokens) and tearing down registered handlers via @ref
  * kfgx_free_handlers before returning upon successful execution.
- *
- * @warning If argument parsing (@ref kfgx_cli_parser) fails, early exit occurs
- * without invoking handler execution or performing handler deallocation.
  */
-int handle()
+int handle(void)
 {
     if (check_cli_args(&cli_ctx.cmd) || check_cli_ctx())
         return -1;
 
-    return kfgx_handle_impl(cli_ctx.cmd);
+    return kfgx_handle_impl();
 }
 
 //----------| handlers registering
@@ -322,7 +316,7 @@ static int kfgx_free_handlers(void)
  *
  * @return 0 when a matching handler is found, otherwise -1.
  */
-static int kfgx_resolve_handler()
+static int kfgx_resolve_handler(void)
 {
     handler_t *h;
 
@@ -333,9 +327,11 @@ static int kfgx_resolve_handler()
             "suspicious state, cli_ctx.cmd.handler=%p but it should be NULL",
             (void *)h);
     }
+
     foreach_node(h, cli_ctx.lhandlers->head)
     {
-        if (cli_ctx.cmd.args_set && !strcmp(h->name, cli_ctx.cmd.args_set[0])) {
+        if (cli_ctx.cmd.args_set && cli_ctx.cmd.args_set[0] && h->name &&
+            !strcmp(h->name, cli_ctx.cmd.args_set[0])) {
             cli_ctx.cmd.handler = h;
             return 0;
         }
@@ -369,14 +365,24 @@ int generate_bash_completions()
         return -1;
     }
 
+    if (init_bash_completions_file()) {
+        pr_error("bash completion file initialization failed");
+        return -1;
+    }
+
     foreach_node(h, cli_ctx.lhandlers->head)
     {
+        if (h == &kfgx_default_handler || (h->name && strchr(h->name, ' '))) {
+            continue;
+        }
         // consume high memory, initialize all handlers options
         h->init_opt(h);
+        pr_info("generate bash completions for handler '%s'", h->name);
         if (bash_completions(h)) {
             pr_error("failed to generate bash completions files");
             return -1;
         }
+        kfgx_token_free(&h->ltokens);
     }
     return 0;
 }
@@ -385,17 +391,29 @@ int generate_sh_completions()
 {
     handler_t *h;
 
-    if (!cli_ctx.lhandlers || cli_ctx.lhandlers->head) {
+    if (!cli_ctx.lhandlers || !cli_ctx.lhandlers->head) {
         pr_debug("no handler set");
+        return -1;
+    }
+
+    if (init_sh_completions_file()) {
+        pr_error("sh completion file initialization failed");
         return -1;
     }
 
     foreach_node(h, cli_ctx.lhandlers->head)
     {
+        if (h == &kfgx_default_handler || (h->name && strchr(h->name, ' '))) {
+            continue;
+        }
+        // consume high memory, initialize all handlers options
+        h->init_opt(h);
+        pr_info("generate bash completions for handler '%s'", h->name);
         if (sh_completions(h)) {
             pr_error("failed to generate sh completions files");
             return -1;
         }
+        kfgx_token_free(&h->ltokens);
     }
     return 0;
 }

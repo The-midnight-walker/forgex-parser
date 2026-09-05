@@ -4,7 +4,7 @@
 
 /**
  * @file      shell_completions.c
- * @author    jd
+ * @author    midnight walker
  * @brief     Generate Bash and sh completion scripts for registered handlers.
  * @version   0.1
  * @date      2026-09-01
@@ -36,9 +36,12 @@ static int sh_completions_impl(const handler_t *h, const char *filename)
         "        $(compgen -W \"", // auto add
         h->name);
 
-    if (h->ltokens && h->ltokens->opt) {
+    if (h->ltokens) {
         foreach_node(t, h->ltokens)
         {
+            if (!t || !t->opt)
+                continue;
+
             if (t->opt->l_opt && t->opt->s_opt) {
                 fprintf(f, "%s %s ", t->opt->l_opt, t->opt->s_opt);
             } else if (t->opt->l_opt) {
@@ -98,11 +101,6 @@ int bash_completions(handler_t *h)
         pr_debug("handler %s has no options", h->name);
     }
 
-    if (init_bash_completions_file()) {
-        pr_error("bash completion file initialization failed");
-        return -1;
-    }
-
     return sh_completions_impl(h, BASH_FILENAME);
 }
 
@@ -128,11 +126,6 @@ int sh_completions(handler_t *h)
 
     if (!h->ltokens || !h->ltokens->opt) {
         pr_debug("handler %s has no options", h->name);
-    }
-
-    if (init_sh_completions_file()) {
-        pr_error("sh completion file initialization failed");
-        return -1;
     }
 
     return sh_completions_impl(h, SH_FILENAME);

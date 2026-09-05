@@ -2,110 +2,150 @@
 //
 // vim: set ts=8 sw=8 noet tw=80 cc=80 fo+=t :
 
-/**
- * @file      test_parser.c
- * @author    jd
- * @brief     Test suite for CLI argument parsing and tokenization verification.
- * @version   0.1
- * @date      2026-08-30
- *
- * @details   This test suite automatically validates the tokenizer and parser
- *            functions (`kfgx_cli_tokenizer` and `kfgx_cli_parser`) by checking
- *            flag handling, key-value option parsing, and memory safety.
- *
- * @copyright GNU General Public License v2.0
- */
-
+#include "clicntl.h"
 #include "parser.h"
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-    const char *test_name;
-    int argc;
-    const char *argv[10];
-    int expected_token_count;
-    const char *expected_options[5];
-    const char *expected_values[5];
-} t_test_case;
-
-static void run_single_test(const t_test_case *tc)
+static int dummy_action(opt_t *opt)
 {
-    struct kfgx_cmd_struct cmd = {0};
+    (void)opt;
+    return 0;
+}
 
-    printf("[TEST] %s\n", tc->test_name);
+static int init_test_options(handler_t *h)
+{
+    add_new_option(h, &(opt_t){.l_opt = "--verbose", .s_opt = "-v"});
+    add_new_option(h, &(opt_t){.l_opt = "--help", .s_opt = "-h"});
+    add_new_option(h, &(opt_t){.l_opt = "--level", .s_opt = "-l"});
+    add_new_option(h, &(opt_t){.s_opt = "-q"}); // short only (no l_opt)
+    return 0;
+}
 
-    int res = kfgx_cli_parser(&cmd, tc->argc, (char **)tc->argv);
-    assert(res == 0 && "kfgx_cli_parser failed unexpectedly");
+static void test_matching(void)
+{
+    const char *dummy_argv[] = {"test_prog", NULL};
+    init_handling(1, dummy_argv);
 
-    token *t = cmd.ltokens;
+    handler_t h = {
+        .name = "test",
+        .prio = 1,
+        .action = dummy_action,
+        .init_opt = init_test_options,
+    };
+
+    int reg = register_handler(&h);
+    assert(reg == 0);
+
+    h.init_opt(&h);
+
+    char *argv[] = {"--verbose", "-h", "--level=42", NULL};
+    struct cmd_struct cmd = {
+        .handler = &h,
+        .args_nr = 3,
+        .args_set = argv,
+    };
+
+    int ret = kfgx_cli_parser(&cmd);
+    assert(ret == 0);
+
+    // Verify matched tokens
+    token_t *t = h.ltokens;
+    assert(t != NULL);
+
     int count = 0;
-
     while (t) {
-        printf("  option: %-15s", t->option ? t->option : "(null)");
-        if (t->value) {
-            printf(" | value: %s", t->value);
+        if (t->opt) {
+            count++;
+            if (t->opt->l_opt && strcmp(t->opt->l_opt, "--level") == 0) {
+                assert(
+                    t->opt->value != NULL && strcmp(t->opt->value, "42") == 0);
+            }
         }
-        printf("\n");
-
-        assert(count < tc->expected_token_count && "Too many tokens returned");
-
-        if (tc->expected_options[count]) {
-            assert(t->option != NULL);
-            assert(strcmp(t->option, tc->expected_options[count]) == 0);
-        } else {
-            assert(t->option == NULL);
-        }
-
-        if (tc->expected_values[count]) {
-            assert(t->value != NULL);
-            assert(strcmp(t->value, tc->expected_values[count]) == 0);
-        } else {
-            assert(t->value == NULL);
-        }
-
-        count++;
         t = t->next;
     }
+    assert(count == 3);
 
-    assert(count == tc->expected_token_count && "Token count mismatch");
+    kfgx_token_free(&h.ltokens);
+    unregister_handler(&h);
+    printf("[PASS] test_matching\n");
+}
 
-    kfgx_cli_token_free(cmd.ltokens);
+static void test_unrecognized_option(void)
+{
+    const char *dummy_argv[] = {"test_prog", NULL};
+    init_handling(1, dummy_argv);
 
-    printf("Result: OK\n\n");
+    handler_t h = {
+        .name = "test_unrec",
+        .prio = 1,
+        .action = dummy_action,
+        .init_opt = init_test_options,
+    };
+
+    int reg = register_handler(&h);
+    assert(reg == 0);
+
+    h.init_opt(&h);
+
+    char *argv[] = {"--unrecognized", NULL};
+    struct cmd_struct cmd = {
+        .handler = &h,
+        .args_nr = 1,
+        .args_set = argv,
+    };
+
+    int ret = kfgx_cli_parser(&cmd);
+    assert(ret == -1);
+    assert(h.ltokens == NULL);
+
+    unregister_handler(&h);
+    printf("[PASS] test_unrecognized_option\n");
+}
+
+static void test_short_only_option(void)
+{
+    const char *dummy_argv[] = {"test_prog", NULL};
+    init_handling(1, dummy_argv);
+
+    handler_t h = {
+        .name = "test_short",
+        .prio = 1,
+        .action = dummy_action,
+        .init_opt = init_test_options,
+    };
+
+    int reg = register_handler(&h);
+    assert(reg == 0);
+
+    h.init_opt(&h);
+
+    char *argv[] = {"-q", NULL};
+    struct cmd_struct cmd = {
+        .handler = &h,
+        .args_nr = 1,
+        .args_set = argv,
+    };
+
+    int ret = kfgx_cli_parser(&cmd);
+    assert(ret == 0);
+    assert(h.ltokens != NULL);
+    assert(h.ltokens->opt != NULL);
+    assert(strcmp(h.ltokens->opt->s_opt, "-q") == 0);
+
+    kfgx_token_free(&h.ltokens);
+    unregister_handler(&h);
+    printf("[PASS] test_short_only_option\n");
 }
 
 int main(void)
 {
-    t_test_case suite[] = {
-        {.test_name = "Single flag option",
-         .argc = 1,
-         .argv = {"-v", NULL},
-         .expected_token_count = 1,
-         .expected_options = {"-v"},
-         .expected_values = {NULL}},
-        {.test_name = "Key-value options",
-         .argc = 2,
-         .argv = {"-foo=bar", "--level=42", NULL},
-         .expected_token_count = 2,
-         .expected_options = {"-foo", "--level"},
-         .expected_values = {"bar", "42"}},
-        {.test_name = "Mixed flags and values",
-         .argc = 3,
-         .argv = {"--verbose", "-speed=fast", "file.txt", NULL},
-         .expected_token_count = 3,
-         .expected_options = {"--verbose", "-speed", "file.txt"},
-         .expected_values = {NULL, "fast", NULL}}};
-
-    size_t total_tests = sizeof(suite) / sizeof(suite[0]);
-
-    printf("=== Running Kernforgex Parser Test Suite ===\n\n");
-    for (size_t i = 0; i < total_tests; i++) {
-        run_single_test(&suite[i]);
-    }
-    printf("All %zu tests passed successfully!\n", total_tests);
-
+    printf("=== Running Kernforgex Test Suite ===\n");
+    test_matching();
+    test_unrecognized_option();
+    test_short_only_option();
+    printf("All tests passed successfully!\n");
     return 0;
 }
