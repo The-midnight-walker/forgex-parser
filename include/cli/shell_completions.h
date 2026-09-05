@@ -62,7 +62,28 @@ static inline int init_sh_completions_file(void)
     return 0;
 }
 
-int bash_completions(handler_t *);
-int sh_completions(handler_t *);
+/**
+ * @brief Generates Bash auto-completion script block for a given CLI handler.
+ *
+ * Appends a Bash completion function and complete directive to the Bash
+ * completion file.
+ *
+ * @param[in] h Pointer to the command handler configuration structure.
+ *
+ * @return 0 on success, -1 on error.
+ */
+int bash_completions(handler_t *h);
+
+/**
+ * @brief Generates POSIX sh auto-completion script block for a given CLI
+ * handler.
+ *
+ * Appends a POSIX-compliant completion function to the sh completion file.
+ *
+ * @param[in] h Pointer to the command handler configuration structure.
+ *
+ * @return 0 on success, -1 on error.
+ */
+int sh_completions(handler_t *h);
 
 #endif /*INCLUDE_SHELL_COMPLETIONS_H*/

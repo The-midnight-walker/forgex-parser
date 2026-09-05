@@ -97,8 +97,8 @@ static void chained_matched_options(token_t *head)
         }
 
         if (!t->opt) {
-            pr_fatal("NULL option found: cleanup or token setup failed");
-            exit(-1);
+            pr_error("NULL option found: cleanup or token setup failed");
+            return;
         }
 
         if (t->next && t->next->opt) {
@@ -122,7 +122,7 @@ static int has_match_l_opt(token_t *head, const char *arg)
 
     foreach_node(t, head)
     {
-        if (t->opt && HAVE_OPTION(t->opt->l_opt, arg)) {
+        if (t->opt && t->opt->l_opt && HAVE_OPTION(t->opt->l_opt, arg)) {
             t->match = 1;
             return OPT_MATCH;
         }
@@ -143,21 +143,28 @@ static int has_match_s_opt(token_t *head, const char *arg)
     if (arg[0] == '-' && arg[1] != '\0' && arg[1] != '-') {
         for (const char *p = arg + 1; *p != '\0'; p++) {
             char short_str[2] = {*p, '\0'};
+            int matched = 0;
             foreach_node(t, head)
             {
                 /* Compare while skipping the leading '-' in opt->s_opt */
-                if (t->opt && t->opt->s_opt && t->opt->s_opt[0] != '\0' &&
-                    HAVE_OPTION(t->opt->s_opt + 1, short_str)) {
-                    t->match = 1;
-                    goto next;
+                if (t->opt && t->opt->s_opt && t->opt->s_opt[0] != '\0') {
+                    const char *s = (t->opt->s_opt[0] == '-')
+                                        ? t->opt->s_opt + 1
+                                        : t->opt->s_opt;
+                    if (HAVE_OPTION(s, short_str)) {
+                        t->match = 1;
+                        matched = 1;
+                        break;
+                    }
                 }
             }
-            return OPT_NOT_MATCH;
-        next:
+            if (!matched)
+                return OPT_NOT_MATCH;
         }
+        return OPT_MATCH;
     }
 
-    return OPT_MATCH;
+    return OPT_NOT_MATCH;
 }
 
 static int has_value(token_t *head, const char *arg)
@@ -200,7 +207,7 @@ static int has_value(token_t *head, const char *arg)
     /* Match key against registered long options */
     foreach_node(t, head)
     {
-        if (t->opt && HAVE_OPTION(t->opt->l_opt, key)) {
+        if (t->opt && t->opt->l_opt && HAVE_OPTION(t->opt->l_opt, key)) {
             t->match = 1;
 
             /* Prevent memory leaks if option value is reassigned */
@@ -274,7 +281,7 @@ static int kfgx_cli_tokenizer_impl(struct cmd_struct *cmd)
         }
     err:
         kfgx_token_free(&cmd->handler->ltokens);
-        return 0;
+        return -1;
 
     next:
         set++;

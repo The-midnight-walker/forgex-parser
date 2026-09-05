@@ -4,16 +4,18 @@
 
 /**
  * @file      my_handler.c
- * @author    jd
- * @brief
- * @version   0.1
+ * @author    midnight walker
+ * @brief     Reference example CLI handler implementation.
+ * @version   0.2
  * @date      2026-09-01
  *
- * @details
+ * @details   Demonstrates how to declare CLI options, handle option matching,
+ *            define an action callback, and register the handler in the system.
  *
  * @copyright GNU General Public License v2.0
  */
 
+#include "my_handler.h"
 #include "clicntl.h"
 
 static void my_handler_usage(void)
@@ -30,7 +32,7 @@ static int my_init_options(handler_t *h)
 {
     add_new_option(h, &(opt_t){.l_opt = "--help", .s_opt = "-h"});
     add_new_option(h, &(opt_t){.l_opt = "--version", .s_opt = "-v"});
-    add_new_option(h, &(opt_t){.l_opt = "--verbose", .s_opt = "-t"});
+    add_new_option(h, &(opt_t){.l_opt = "--verbose", .s_opt = "-V"});
 
     return 0;
 }
@@ -44,7 +46,6 @@ static int my_handler_action(opt_t *options)
     } else {
         foreach_node(o, options)
         {
-            pr_debug("%s ", o->l_opt);
             if (HAVE_OPTION(o->l_opt, "--help"))
                 my_handler_usage();
 
@@ -68,18 +69,18 @@ static handler_t my_handler = {
     .next = NULL,
 };
 
-// default handler
-int my_handler_init()
+// default handler initialization
+int my_handler_init(void)
 {
     // registering our handler
     if (register_handler(&my_handler)) {
-        printf("failed to register default handler");
+        pr_error("failed to register default handler");
         return -1;
     }
 
-    // We should set a default handler otherwise , program running failed
+    // We should set a default handler otherwise
     if (set_default_handler(&my_handler)) {
-        printf("failed to set default handler");
+        pr_error("failed to set default handler");
         return -1;
     }
 

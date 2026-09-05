@@ -1,65 +1,119 @@
 # kernforgex
 
-This project is not the final tool itself. It is the small infrastructure layer that was created while building `kernforgex` another repository on my github. At its core, it was first and foremost a parser and command-dispatch framework for Linux-oriented tooling.
+[![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](LICENSE)
+[![Standard: C11](https://img.shields.io/badge/Standard-C11-green.svg)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
+[![Platform: Linux](https://img.shields.io/badge/Platform-Linux-orange.svg)](https://kernel.org)
 
-## What this project is
+**kernforgex** is a lightweight, modular C framework for building extensible Linux command-line tools. It provides a priority-ordered command dispatcher, a flexible argument tokenizer, automatic shell completion generation, and kernel-style logging.
 
-This repository is a lightweight C framework for creating Linux command-line tools quickly.
+---
 
-Its purpose is to provide the base for:
-- argument parsing,
-- handler dispatch,
-- shell completion generation,
+## Key Features
 
-The goal is not to be a finished end-user utility by itself, but to be the infrastructure that enables building one.
+- **Priority-Ordered Handler Dispatcher**: Register commands with integer priorities; the dispatcher automatically matches CLI inputs or routes to configurable fallback handlers.
+- **Robust Argument Tokenizer**: Supports long options (`--option`), short options (`-v`), clustered short options (`-vh`), and key-value assignments (`--level=42`).
+- **Dynamic Shell Completion Generation**: Generates Bash (`completions.bash`) and POSIX sh scripts directly from registered handler definitions.
+- **Kernel-Style Logging**: Color-coded, bitmask-filtered logging macros (`pr_info`, `pr_debug`, `pr_warn`, `pr_error`, `pr_fatal`).
+- **Strict Quality Standards**: Clean compilation under `-Wall -Wextra -Wshadow -Werror -Wconversion -Wformat=2`.
 
-## Why it exists
+---
 
-When working on a bigger tool, the first thing you need is not the final feature set — it is the mechanism that makes commands possible.
+## Project Layout
 
-Before the real command exists, you need:
-- a CLI parser,
-- a simple option model,
-- a way to wire commands to handlers,
-- a central entry point,
-- reusable patterns for help/version/verbose mode,
-- shell completion support.
+```text
+kernforgex/
+├── CMakeLists.txt          # Root build configuration, formatting, doc & test targets
+├── include/                # Public and core headers (API definitions only)
+│   ├── cli/
+│   │   ├── clicntl.h       # Master CLI structures, token macros, and helper functions
+│   │   ├── parser.h        # Tokenizer and parser function prototypes
+│   │   └── shell_completions.h # Shell completion script headers and generators
+│   ├── handlers/
+│   │   ├── default_handle.h# Fallback handler declaration
+│   │   ├── handlers.h      # Handler registration and dispatch engine
+│   │   └── prio_lists.h    # Intrusive priority list implementation
+│   ├── debug.h             # Logging macros and level definitions
+│   └── errors.h            # Error code definitions
+├── src/                    # Implementation units (.c)
+│   ├── CMakeLists.txt      # Source target build configuration
+│   ├── main.c              # Application entry point
+│   ├── debug.c             # Log-level bitmask management
+│   ├── cli/
+│   │   ├── parser.c        # Tokenizer and CLI parsing logic
+│   │   └── shell_completions.c # Bash & sh completion script writers
+│   └── handlers/
+│       ├── handle.c        # Handler priority queue, dispatching, lifecycle
+│       ├── default_handle.c# Default fallback handler implementation
+│       ├── my_handler.c    # Reference example handler
+│       └── my_handler.h    # Example handler header
+└── tests/                  # Automated test suite
+    ├── CMakeLists.txt      # Test target configuration (CTest)
+    └── test01.c            # Parser, tokenization, and validation unit tests
+```
 
-This project is exactly that foundation.
+---
 
-## Core execution pattern
+## Quick Start
 
-The main execution flow is defined in `src/main.c`.
+### Prerequisites
+
+- **CMake** >= 3.10
+- **C11** compatible compiler (GCC or Clang)
+- *(Optional)* **clang-format** (for code formatting)
+- *(Optional)* **Doxygen** (for generating HTML documentation)
+
+### Build
+
+```bash
+# Configure build
+cmake -B build
+
+# Compile project
+cmake --build build
+```
+
+The resulting executable will be located at `build/src/kfgx`.
+
+### Running Tests
+
+```bash
+ctest --test-dir build --output-on-failure
+```
+
+### Code Formatting & Documentation
+
+```bash
+# Format code using clang-format
+cmake --build build --target format
+
+# Generate Doxygen documentation (if Doxygen is installed)
+cmake --build build --target doc
+```
+
+---
+
+## Architecture & How It Works
+
+### 1. Central Dispatch Flow (`src/main.c`)
 
 ```c
-
-#include <stdio.h>
-#include <string.h>
-
-#define STRICT_MODE
-
-// include handlers header
 #include "clicntl.h"
-
-// include our header
 #include "my_handler.h"
 
 int main(int argc, char *argv[])
 {
+    // 1. Initialize CLI context and argument tracking
+    init_handling(argc, (const char **)argv);
 
-    // init command line handling
-    init_handling(argc,argv);
-
-    // init our handler
-    // insert our default handler in our case it is under src/handlers
+    // 2. Register your custom handler(s)
     if (my_handler_init()) {
         return -1;
     }
 
-    // avoid this cause high memory on free area
+    // 3. Generate Bash auto-completion script
     generate_bash_completions();
 
-    // handling
+    // 4. Parse arguments and dispatch matching handler
     if (handle()) {
         fprintf(stderr, "Error: Parsing failed\n");
         return -1;
@@ -69,70 +123,48 @@ int main(int argc, char *argv[])
 }
 ```
 
-This is the canonical example to follow when creating a new command-line tool from this base.
+### 2. Creating a Custom Handler (`src/handlers/my_handler.c`)
 
-The logic is simple:
-1. initialize CLI handling,
-2. register the custom handler,
-4. execute the matching command,
-5. return the result.
-
-## The reference handler example
-
-The file `src/handlers/my_handler.c` is the prototype example to follow.
-
-It defines the actual command behavior, the registered options, and the handler object used by the dispatcher.
-
-### Option registration
+A handler bundles an **action callback**, an **options initialization callback**, a **unique name**, and a **priority** (lower numerical values equal higher priority):
 
 ```c
+#include "clicntl.h"
+#include "my_handler.h"
+
+// 1. Define options associated with this handler
 static int my_init_options(handler_t *h)
 {
-    add_new_option(
-        h,
-        &(opt_t){
-            .l_opt = "--help", .s_opt = "-h"});
-    add_new_option(
-        h,
-        &(opt_t){
-            .l_opt = "--version", .s_opt = "-v"});
-    add_new_option(
-        h,
-        &(opt_t){
-            .l_opt = "--verbose", .s_opt = "-t"});
-
+    add_new_option(h, &(opt_t){.l_opt = "--help", .s_opt = "-h"});
+    add_new_option(h, &(opt_t){.l_opt = "--version", .s_opt = "-v"});
+    add_new_option(h, &(opt_t){.l_opt = "--verbose", .s_opt = "-V"});
     return 0;
 }
-```
 
-### Action callback
-
-```c
+// 2. Define action executed when this handler matches
 static int my_handler_action(opt_t *options)
 {
     opt_t *o;
 
-    if(!options){
-        my_handler_usage();
-    }else{
-        foreach_node(o, options){
-            if(HAVE_OPTION(o->l_opt, "--help"))
-                my_handler_usage();
-
-            if(HAVE_OPTION(o->l_opt, "--verbose"))
-                printf("we are on verbose mode\n");
-
-            if(HAVE_OPTION(o->l_opt, "--version"))
-                printf("we are on version 1.0.0\n");
-        }
+    if (!options) {
+        printf("No options specified. Showing usage...\n");
+        return 0;
     }
+
+    foreach_node(o, options) {
+        if (HAVE_OPTION(o->l_opt, "--help"))
+            printf("Showing help message.\n");
+
+        if (HAVE_OPTION(o->l_opt, "--verbose"))
+            printf("Verbose mode enabled.\n");
+
+        if (HAVE_OPTION(o->l_opt, "--version"))
+            printf("Version 1.0.0\n");
+    }
+
     return 0;
 }
-```
 
-### Handler definition
-
-```c
+// 3. Declare handler structure
 static handler_t my_handler = {
     .action = my_handler_action,
     .init_opt = my_init_options,
@@ -141,56 +173,53 @@ static handler_t my_handler = {
     .ltokens = NULL,
     .next = NULL,
 };
+
+// 4. Registration entry point
+int my_handler_init(void)
+{
+    if (register_handler(&my_handler))
+        return -1;
+
+    // Set as default fallback handler when no command argument is specified
+    if (set_default_handler(&my_handler))
+        return -1;
+
+    return 0;
+}
 ```
 
-This is the exact model to follow when creating your own command family.
+---
 
-## Useful APIs in this project
+## Shell Completions
 
-The most relevant APIs available in the current codebase are:
-
-- `init_handling(int argc, char **argv)`
-  - prepares the CLI environment
-- `register_handler(handler_t *h)`
-  - registers a new command handler
-- `set_default_handler(handler_t *h)`
-  - assigns the fallback handler
-- `handle()`
-  - dispatches to the correct command handler
-- `add_new_option(handler_t *h, const opt_t *opt)`
-  - registers a new option
-- `generate_bash_completions()`
-  - generates Bash completion metadata
-- `generate_sh_completions()`
-  - generates shell completion metadata
-- `check_handler(const handler_t *)`
-  - validates handler integrity
-
-These are the main building blocks for building the real command later.
-
-## Completion generation
-
-This project includes shell completion generation helpers:
-
-- `generate_bash_completions()`
-- `generate_sh_completions()`
-
-This part is useful for ergonomic shell integration, but in the current version it is still a bit heavy.
-
-### Important note
-
-At the present stage, the completion-generation path can consume more memory than the normal runtime flow. Because of that, a common workflow during development is:
-
-- build once with completion generation enabled,
-- build another lightweight version without it for optimized runtime usage.
-
-This is not a final design decision; it is a temporary constraint while the completion system is being refined.
-
-The long-term goal is to make shell completion optional, lighter, and cleaner.
-
-## Build
+Running `generate_bash_completions()` inspects all registered handlers and writes a complete Bash completion script to `completions.bash`:
 
 ```bash
-cmake -S . -B build
-cmake --build build
+# Enable completion in your current shell
+source completions.bash
+
+# Test completion:
+./build/src/kfgx --<TAB><TAB>
+# Suggestions: --help  --verbose  --version
 ```
+
+---
+
+## Core API Reference
+
+| Function | Header | Description |
+| :--- | :--- | :--- |
+| `init_handling(argc, argv)` | [`handlers.h`](include/handlers/handlers.h) | Initializes internal priority lists and CLI context with input arguments. |
+| `register_handler(h)` | [`handlers.h`](include/handlers/handlers.h) | Inserts a configured `handler_t` into the priority-sorted execution list. |
+| `set_default_handler(h)` | [`handlers.h`](include/handlers/handlers.h) | Assigns the fallback handler invoked when no command name matches. |
+| `handle()` | [`handlers.h`](include/handlers/handlers.h) | Resolves the active handler, parses tokens, executes the action callback, and frees resources. |
+| `add_new_option(h, opt)` | [`clicntl.h`](include/cli/clicntl.h) | Allocates and attaches an option specification (`--long`, `-s`) to a handler. |
+| `generate_bash_completions()` | [`handlers.h`](include/handlers/handlers.h) | Generates `completions.bash` script for all registered handlers with options. |
+| `generate_sh_completions()` | [`handlers.h`](include/handlers/handlers.h) | Generates POSIX `completions.sh` fallback script. |
+| `check_handler(h)` | [`handlers.h`](include/handlers/handlers.h) | Validates handler structure and verifies registration state. |
+
+---
+
+## License
+
+This project is licensed under the GNU General Public License v2.0 - see the [LICENSE](LICENSE) file for details.

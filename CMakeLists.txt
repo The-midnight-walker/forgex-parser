@@ -45,5 +45,8 @@ endif()
 
 add_subdirectory(src)
 
+enable_testing()
+add_subdirectory(tests)
+
 #TODO: install
 #install(TARGETS program DESTINATION bin)

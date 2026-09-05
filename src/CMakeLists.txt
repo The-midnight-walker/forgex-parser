@@ -2,12 +2,8 @@
 #
 # vim: set ts=8 sw=8 noet tw=80 cc=80 fo+=t :
 
-file(GLOB_RECURSE SOURCE_FILES
-    "${CMAKE_SOURCE_DIR}/include/*.c"
-    "${CMAKE_SOURCE_DIR}/include/handlers/*.c"
-    "${CMAKE_SOURCE_DIR}/include/cli/*.c"
-    "${CMAKE_SOURCE_DIR}/src/*.c"
-    "${CMAKE_SOURCE_DIR}/src/handlers/*.c"
+file(GLOB_RECURSE SOURCE_FILES CONFIGURE_DEPENDS
+    "${CMAKE_CURRENT_SOURCE_DIR}/*.c"
 )
 
 # executable name : kfgx
@@ -20,6 +16,7 @@ target_compile_features(${PROJECT_NAME} PRIVATE
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     _POSIX_C_SOURCE=200809L
     DEBUG
+    PROJECT_NAME="${PROJECT_NAME}"
 )
 
 target_include_directories(${PROJECT_NAME} PRIVATE

@@ -3,16 +3,15 @@
 // vim: set ts=8 sw=8 noet tw=80 cc=80 fo+=t :
 
 /**
- * @file      my_handler.c
+ * @file      default_handle.c
  * @author    midnight walker
- * @brief
- * @version   0.1
+ * @brief     Implementation of the fallback default CLI handler.
+ * @version   0.2
  * @date      2026-09-05
  *
- *@brief Initializes the CLI context with default values before handling starts.
- * Initializes the CLI context structures with default values to ensure that
- * the context is properly initialized and not empty when the handling process
- *begins.
+ * @details   Initializes the CLI context with default fallback behavior to
+ * ensure the command dispatcher has a valid handler even if no custom handler
+ *            matches the input arguments.
  *
  * @copyright GNU General Public License v2.0
  */
@@ -25,7 +24,7 @@ static int kfgx_default_handler_init_options(handler_t *h)
 {
     (void)h;
 
-    pr_debug("");
+    pr_debug("no options to initialize for default fallback handler");
     return 0;
 }
 
@@ -33,15 +32,16 @@ static int kfgx_default_handler_action(opt_t *options)
 {
     (void)options;
 
-    printf("default handle, no default handler set.");
-    pr_debug("");
+    printf("default handle: no specific handler matched or set.\n");
     return 0;
 }
 
-// default handler
+// default fallback handler
 handler_t kfgx_default_handler = {
     .action = kfgx_default_handler_action,
     .init_opt = kfgx_default_handler_init_options,
     .name = "kfgx default handler",
     .prio = 0,
+    .ltokens = NULL,
+    .next = NULL,
 };
