@@ -1,10 +1,10 @@
-# kernforgex
+# forgex-parser
 
 [![License: GPL v2](https://img.shields.io/badge/License-GPLv2-blue.svg)](LICENSE)
 [![Standard: C11](https://img.shields.io/badge/Standard-C11-green.svg)](https://en.wikipedia.org/wiki/C11_(C_standard_revision))
 [![Platform: Linux](https://img.shields.io/badge/Platform-Linux-orange.svg)](https://kernel.org)
 
-**kernforgex** is a lightweight, modular C framework for building extensible Linux command-line tools. It provides a priority-ordered command dispatcher, a flexible argument tokenizer, automatic shell completion generation, and kernel-style logging.
+**forgex-parser** is a lightweight, modular C framework for building extensible Linux command-line tools. It provides a priority-ordered command dispatcher, a flexible argument tokenizer, automatic shell completion generation, and kernel-style logging.
 
 ---
 
@@ -21,7 +21,7 @@
 ## Project Layout
 
 ```text
-kernforgex/
+forgex-parser/
 ├── CMakeLists.txt          # Root build configuration, formatting, doc & test targets
 ├── include/                # Public and core headers (API definitions only)
 │   ├── cli/
@@ -102,18 +102,18 @@ cmake --build build --target doc
 
 int main(int argc, char *argv[])
 {
-    // 1. Initialize CLI context and argument tracking
+    // Initialize CLI context and argument tracking
     init_handling(argc, (const char **)argv);
 
-    // 2. Register your custom handler(s)
+    // Register your custom handler(s)
     if (my_handler_init()) {
         return -1;
     }
 
-    // 3. Generate Bash auto-completion script
+    // Generate Bash auto-completion script
     generate_bash_completions();
 
-    // 4. Parse arguments and dispatch matching handler
+    // Parse arguments and dispatch matching handler
     if (handle()) {
         fprintf(stderr, "Error: Parsing failed\n");
         return -1;
@@ -131,7 +131,7 @@ A handler bundles an **action callback**, an **options initialization callback**
 #include "clicntl.h"
 #include "my_handler.h"
 
-// 1. Define options associated with this handler
+// Define options associated with this handler
 static int my_init_options(handler_t *h)
 {
     add_new_option(h, &(opt_t){.l_opt = "--help", .s_opt = "-h"});
@@ -140,7 +140,7 @@ static int my_init_options(handler_t *h)
     return 0;
 }
 
-// 2. Define action executed when this handler matches
+// Define action executed when this handler matches
 static int my_handler_action(opt_t *options)
 {
     opt_t *o;
@@ -164,7 +164,7 @@ static int my_handler_action(opt_t *options)
     return 0;
 }
 
-// 3. Declare handler structure
+// Declare handler structure
 static handler_t my_handler = {
     .action = my_handler_action,
     .init_opt = my_init_options,
@@ -174,7 +174,7 @@ static handler_t my_handler = {
     .next = NULL,
 };
 
-// 4. Registration entry point
+// Registration entry point
 int my_handler_init(void)
 {
     if (register_handler(&my_handler))
